@@ -31,14 +31,10 @@ class DataAnalyzer:
         self.llm_provider = llm_provider
         self.data_scraper = DataScraper()
         
-        # Configure matplotlib for server use
         plt.rcParams['figure.max_open_warning'] = 0
         plt.rcParams['axes.unicode_minus'] = False
     
     async def analyze_with_llm(self, questions: str, df: Optional[pd.DataFrame], additional_files: Optional[Dict[str, bytes]] = None) -> List[Any]:
-        """
-        Perform analysis using LLM-generated code
-        """
         try:
             prompt = self._create_analysis_prompt(questions, df, additional_files)
             analysis_code = await self.llm_provider.generate_analysis_code(prompt)
@@ -54,9 +50,6 @@ class DataAnalyzer:
             return await self._fallback_analysis(questions, df)
 
     def _create_analysis_prompt(self, questions: str, df: Optional[pd.DataFrame], additional_files: Optional[Dict[str, bytes]]) -> str:
-        """
-        Create a detailed prompt for the LLM to generate analysis code.
-        """
         file_info = ""
         if additional_files:
             file_info = "\n\nAdditional files provided:\n"
@@ -95,9 +88,6 @@ class DataAnalyzer:
         return prompt
 
     async def _execute_analysis_code(self, analysis_code: str, df: Optional[pd.DataFrame], additional_files: Optional[Dict[str, bytes]], questions: str) -> List[Any]:
-        """
-        Safely execute the LLM-generated Python code.
-        """
         def _save_plot_to_base64() -> str:
             buffer = io.BytesIO()
             plt.savefig(buffer, format='png', bbox_inches='tight', dpi=100)
@@ -118,7 +108,10 @@ class DataAnalyzer:
             img_base64 = base64.b64encode(img_data).decode('utf-8')
             return f"data:image/png;base64,{img_base64}"
         
-        # Safe builtins for executed code
+        # Async wrapper for scrape_url to work inside sandbox
+        async def _scrape_url(url: str):
+            return await self.data_scraper.scrape_url(url)
+        
         safe_builtins = {
             'print': print,
             'len': len,
@@ -151,7 +144,7 @@ class DataAnalyzer:
             'df': df,
             'additional_files': additional_files,
             '_save_plot_to_base64': _save_plot_to_base64,
-            'scrape_url': self.data_scraper.scrape_url,
+            'scrape_url': _scrape_url,
         }
         
         try:
@@ -173,9 +166,6 @@ class DataAnalyzer:
             return await self._fallback_analysis(f"Code execution error: {str(e)}", df)
 
     async def _fallback_analysis(self, questions: str, df: Optional[pd.DataFrame]) -> List[Any]:
-        """
-        Perform a basic fallback analysis if the LLM or generated code fails.
-        """
         logger.warning(f"Using fallback analysis method for: {questions}")
         
         try:
@@ -226,7 +216,6 @@ class DataAnalyzer:
             return [0, f"Complete analysis failure: {str(e)}", 0.0, self._create_error_plot()]
     
     def _save_plot_to_base64_fallback(self) -> str:
-        """Save a plot to base64 string for fallback."""
         try:
             buffer = io.BytesIO()
             plt.savefig(buffer, format='png', bbox_inches='tight', dpi=100)
@@ -251,7 +240,6 @@ class DataAnalyzer:
             return self._create_error_plot()
     
     def _create_error_plot(self) -> str:
-        """Create a minimal error plot when everything else fails"""
         try:
             plt.figure(figsize=(4, 3))
             plt.text(0.5, 0.5, 'Error\nGenerating\nPlot', ha='center', va='center', fontsize=12)
@@ -267,7 +255,6 @@ class DataAnalyzer:
             return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
     
     def get_fallback_response(self, error) -> List[Any]:
-        """Compatibility method for the handler to call fallback analysis"""
         try:
             loop = asyncio.get_running_loop()
             return [0, f"Error occurred: {str(error)}", 0.0, self._create_error_plot()]
