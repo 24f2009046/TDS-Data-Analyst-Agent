@@ -37,4 +37,5 @@ ENV MATPLOTLIB_CACHE_DIR=/tmp/matplotlib
 EXPOSE 8000
 
 # Use the correct module path for your structure
-CMD ["gunicorn", "--config", "gunicorn.conf.py", "main:app"]
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app.main:app"]
+
