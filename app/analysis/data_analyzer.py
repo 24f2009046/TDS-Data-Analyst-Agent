@@ -38,28 +38,15 @@ class DataAnalyzer:
     async def analyze_with_llm(self, questions: str, df: Optional[pd.DataFrame], additional_files: Optional[Dict[str, bytes]] = None) -> List[Any]:
         """
         Perform analysis using LLM-generated code
-        
-        Args:
-            questions: The analysis questions/tasks.
-            df: The main pandas DataFrame to analyze.
-            additional_files: A dictionary of other files (e.g., images).
-
-        Returns:
-            A list containing the analysis results in the specified format.
         """
-        
         try:
-            # Create analysis prompt
             prompt = self._create_analysis_prompt(questions, df, additional_files)
-            
-            # Get code from LLM
             analysis_code = await self.llm_provider.generate_analysis_code(prompt)
             
             if not analysis_code:
                 logger.error("LLM failed to generate analysis code. Using fallback.")
                 return await self._fallback_analysis(questions, df)
             
-            # Execute the generated code
             return await self._execute_analysis_code(analysis_code, df, additional_files, questions)
         
         except Exception as e:
@@ -69,17 +56,13 @@ class DataAnalyzer:
     def _create_analysis_prompt(self, questions: str, df: Optional[pd.DataFrame], additional_files: Optional[Dict[str, bytes]]) -> str:
         """
         Create a detailed prompt for the LLM to generate analysis code.
-        The prompt includes the questions, the DataFrame's schema, and a few sample rows.
         """
-        
-        # This will contain information about the attached files to give to the LLM.
         file_info = ""
         if additional_files:
             file_info = "\n\nAdditional files provided:\n"
             for filename in additional_files.keys():
                 file_info += f"- {filename}\n"
         
-        # Give the LLM the structure of the data it will be working with.
         if df is not None and not df.empty:
             df_head_str = df.head(3).to_string()
             df_info_buffer = io.StringIO()
@@ -115,7 +98,6 @@ class DataAnalyzer:
         """
         Safely execute the LLM-generated Python code.
         """
-        
         def _save_plot_to_base64() -> str:
             buffer = io.BytesIO()
             plt.savefig(buffer, format='png', bbox_inches='tight', dpi=100)
@@ -135,7 +117,29 @@ class DataAnalyzer:
 
             img_base64 = base64.b64encode(img_data).decode('utf-8')
             return f"data:image/png;base64,{img_base64}"
-            
+        
+        # Safe builtins for executed code
+        safe_builtins = {
+            'print': print,
+            'len': len,
+            'str': str,
+            'float': float,
+            'int': int,
+            'list': list,
+            'dict': dict,
+            'Exception': Exception,
+            'isinstance': isinstance,
+            'range': range,
+            'enumerate': enumerate,
+            'zip': zip,
+            'sum': sum,
+            'max': max,
+            'min': min,
+            'abs': abs,
+            'round': round,
+            '__import__': __import__,
+        }
+        
         local_scope = {
             'pd': pd,
             'np': np,
@@ -148,30 +152,10 @@ class DataAnalyzer:
             'additional_files': additional_files,
             '_save_plot_to_base64': _save_plot_to_base64,
             'scrape_url': self.data_scraper.scrape_url,
-            '__builtins__': {
-                'print': print,
-                'len': len,
-                'str': str,
-                'float': float,
-                'int': int,
-                'list': list,
-                'dict': dict,
-                'Exception': Exception,
-                'isinstance': isinstance,
-                'range': range,
-                'enumerate': enumerate,
-                'zip': zip,
-                'sum': sum,
-                'max': max,
-                'min': min,
-                'abs': abs,
-                'round': round,
-                '__import__': __import__
-            },
         }
         
         try:
-            exec(analysis_code, {"__builtins__": {}}, local_scope)
+            exec(analysis_code, {"__builtins__": safe_builtins}, local_scope)
             
             if 'final_answer' in local_scope:
                 result = local_scope['final_answer']
@@ -242,9 +226,7 @@ class DataAnalyzer:
             return [0, f"Complete analysis failure: {str(e)}", 0.0, self._create_error_plot()]
     
     def _save_plot_to_base64_fallback(self) -> str:
-        """
-        Internal helper function to save a plot to a base64 string, specifically for fallback.
-        """
+        """Save a plot to base64 string for fallback."""
         try:
             buffer = io.BytesIO()
             plt.savefig(buffer, format='png', bbox_inches='tight', dpi=100)
@@ -285,11 +267,7 @@ class DataAnalyzer:
             return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
     
     def get_fallback_response(self, error) -> List[Any]:
-        """
-        Compatibility method for the handler to call fallback analysis
-        """
-        import asyncio
-        
+        """Compatibility method for the handler to call fallback analysis"""
         try:
             loop = asyncio.get_running_loop()
             return [0, f"Error occurred: {str(error)}", 0.0, self._create_error_plot()]
