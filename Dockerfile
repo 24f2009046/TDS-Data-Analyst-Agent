@@ -1,41 +1,35 @@
-# Dockerfile — Data Analyst Agent
+# Use a slim Python image
 FROM python:3.10-slim
 
+# Set environment vars
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
+
+# Create venv
+RUN python -m venv $VIRTUAL_ENV
+
 # Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y \
     build-essential \
-    libpq-dev \
-    libglib2.0-0 \
-    libsm6 \
-    libxrender1 \
-    libxext6 \
-    libfontconfig1 \
-    libfreetype6 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Set working directory
 WORKDIR /app
 
-# Copy requirements first for caching
-COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+# Copy dependency list
+COPY requirements.txt .
 
-# Copy application
-COPY . /app
+# Upgrade pip and install dependencies inside venv
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Create non-root user (but don't switch yet - we need permissions)
-RUN useradd -m agentuser && chown -R agentuser:agentuser /app
+# Copy project files
+COPY . .
 
-# Switch to non-root user
-USER agentuser
-
-# Set environment variables
-ENV PORT=8000
-ENV PYTHONPATH=/app
-ENV MATPLOTLIB_CACHE_DIR=/tmp/matplotlib
-
+# Expose port
 EXPOSE 8000
 
-# Use the correct module path for your structure
+# Start app using gunicorn from venv
 CMD ["gunicorn", "-c", "gunicorn.conf.py", "app.main:app"]
-
