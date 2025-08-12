@@ -79,7 +79,6 @@ class DataAnalyzer:
             f"- scipy.stats.pearsonr\n"
             f"- scrape_url(url) → returns a pandas DataFrame synchronously.\n"
             f"Do not use external files or non-standard libraries. Do not import libraries—needed ones are already available.\n\n"
-            f"```
             f"# final_answer example:\n"
             f"# final_answer = [42, 'Analysis complete', 3.14, _save_plot_to_base64()]\n"
         )
@@ -135,7 +134,7 @@ class DataAnalyzer:
             'min': min,
             'abs': abs,
             'round': round,
-            '__import__': __import__,  # This is now correctly provided!
+            '__import__': __import__,
         }
 
         local_scope = {
@@ -153,7 +152,7 @@ class DataAnalyzer:
         }
 
         try:
-            # UPDATED LINE: Pass safe_builtins as __builtins__ for globals
+            # Pass safe_builtins as __builtins__ for globals
             exec(analysis_code, {"__builtins__": safe_builtins}, local_scope)
             if 'final_answer' in local_scope:
                 result = local_scope['final_answer']
@@ -178,17 +177,17 @@ class DataAnalyzer:
                 number_answer = len(df)
                 numeric_cols = df.select_dtypes(include=[np.number]).columns
                 if numeric_cols.any():
-                    float_answer = float(df[numeric_cols].mean())
-                    text_answer = f"Fallback: {number_answer} rows, {len(df.columns)} cols, avg {numeric_cols}: {float_answer:.2f}"
+                    float_answer = float(df[numeric_cols[0]].mean())
+                    text_answer = f"Fallback: {number_answer} rows, {len(df.columns)} cols, avg {numeric_cols[0]}: {float_answer:.2f}"
                 else:
                     float_answer = 0.0
                     text_answer = f"Fallback: {number_answer} rows, {len(df.columns)} cols, no numeric data."
 
                 plt.figure(figsize=(8, 6))
                 if len(numeric_cols) >= 2:
-                    plt.scatter(df[numeric_cols], df[numeric_cols], alpha=0.6)[1]
+                    plt.scatter(df[numeric_cols[0]], df[numeric_cols[1]], alpha=0.6)
                 elif len(numeric_cols) == 1:
-                    df[numeric_cols].hist(bins=20)
+                    df[numeric_cols[0]].hist(bins=20)
                 else:
                     plt.text(0.5, 0.5, "No numeric columns", ha='center')
             else:
