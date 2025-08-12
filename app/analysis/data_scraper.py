@@ -5,7 +5,6 @@ Optimized for speed and common data formats
 
 import asyncio
 from typing import Optional
-import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -43,7 +42,7 @@ class DataScraper:
         self.session.close()
         logger.info("Data scraper cleaned up")
     
-    async def scrape_url(self, url: str) -> pd.DataFrame:
+    async def scrape_url(self, url: str):
         """
         Scrape data from URL and return as DataFrame
         
@@ -53,6 +52,9 @@ class DataScraper:
         Returns:
             A pandas DataFrame containing the scraped data.
         """
+        # Local import so pd is available even in restricted exec environments
+        import pandas as pd
+
         logger.info(f"Scraping data from {url}")
         
         if url in self.cache:
@@ -75,8 +77,7 @@ class DataScraper:
                 logger.warning("No tables found on the page.")
                 return pd.DataFrame()
             
-            # Heuristic to find the main data table
-            # We assume the most relevant table is the largest one by row count.
+            # Pick the largest table by row count
             best_table = max(tables, key=lambda t: len(t.find_all('tr')))
             
             # Read the HTML table into a pandas DataFrame
@@ -99,13 +100,14 @@ class DataScraper:
             logger.error(f"Scraping failed for {url}: {e}")
             return pd.DataFrame()
 
-    def _clean_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _clean_dataframe(self, df):
         """
         Perform basic cleaning on the DataFrame.
         This includes removing multi-level headers and cleaning numerical columns.
         """
+        import pandas as pd
+
         # Handle multi-level headers, which are common on Wikipedia.
-        # This collapses them into a single, clean row.
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = ['_'.join(col).strip() for col in df.columns.values]
         
@@ -116,13 +118,13 @@ class DataScraper:
         for col in df.columns:
             if self._is_numeric_like(df[col]):
                 df[col] = self._convert_to_numeric(df[col])
-            # Other conversions (e.g., dates) can be added here
         
         return df
     
-    def _is_numeric_like(self, series: pd.Series) -> bool:
+    def _is_numeric_like(self, series):
         """Check if a series appears to be numeric, even with text"""
-        # Check a sample of the data to avoid performance issues on large datasets
+        import pandas as pd
+
         sample = series.dropna().sample(min(len(series.dropna()), 100))
         numeric_count = 0
         for value in sample:
@@ -133,24 +135,21 @@ class DataScraper:
             except (ValueError, TypeError):
                 pass
         
-        # If most values look numeric, convert the column
         return numeric_count / len(sample) > 0.6
     
-    def _convert_to_numeric(self, series: pd.Series) -> pd.Series:
+    def _convert_to_numeric(self, series):
         """Convert series to numeric, handling common formats"""
-        
+        import pandas as pd
+
         def clean_numeric(value):
             if pd.isna(value):
                 return value
             
-            # Convert to string and clean
             clean_str = str(value).replace(',', '').replace('$', '').replace('%', '')
             
-            # Handle parentheses (negative numbers)
             if '(' in clean_str and ')' in clean_str:
                 clean_str = '-' + clean_str.replace('(', '').replace(')', '')
             
-            # Extract numbers
             number_match = re.search(r'-?\d+(?:\.\d+)?', clean_str)
             if number_match:
                 try:
@@ -161,4 +160,3 @@ class DataScraper:
             return value
         
         return series.apply(clean_numeric)
-
