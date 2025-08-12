@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxrender1 \
     libxext6 \
+    libfontconfig1 \
+    libfreetype6 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -21,12 +23,18 @@ RUN pip install -r requirements.txt
 # Copy application
 COPY . /app
 
-# Optional non-root user
-RUN useradd -m agentuser
+# Create non-root user (but don't switch yet - we need permissions)
+RUN useradd -m agentuser && chown -R agentuser:agentuser /app
+
+# Switch to non-root user
 USER agentuser
 
+# Set environment variables
 ENV PORT=8000
+ENV PYTHONPATH=/app
+ENV MATPLOTLIB_CACHE_DIR=/tmp/matplotlib
+
 EXPOSE 8000
 
-# Run with gunicorn + uvicorn worker, using a config file
-CMD ["gunicorn", "--config", "gunicorn.conf.py", "app.main:app"]
+# Use the correct module path for your structure
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "main:app"]
