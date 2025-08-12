@@ -172,6 +172,7 @@ class DataAnalyzer:
             "np": np,
             "plt": plt,
             "io": io,
+            "BytesIO": io.BytesIO,         # Added BytesIO here
             "base64": base64,
             "LinearRegression": LinearRegression,
             "pearsonr": stats.pearsonr,
@@ -181,13 +182,14 @@ class DataAnalyzer:
             "scrape_url": _scrape_url_sync,
         }
 
-        # Globals for exec (pd and others exposed here too, to prevent "pd not defined")
+        # Globals for exec (pd and others exposed here too)
         global_scope = {
             "__builtins__": safe_builtins,
             "pd": pd,
             "np": np,
             "plt": plt,
             "io": io,
+            "BytesIO": io.BytesIO,         # Added BytesIO here
             "base64": base64,
             "LinearRegression": LinearRegression,
             "pearsonr": stats.pearsonr,
