@@ -17,3 +17,5 @@ lxml>=4.9.3
 google-generativeai>=0.3.2
 psutil>=5.9.6
 tenacity>=8.2.3
+html5lib>=1.1
+
