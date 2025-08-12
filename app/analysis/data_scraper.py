@@ -87,7 +87,7 @@ class DataScraper:
                 
             df = dfs[0]
             
-            # Perform basic data cleaning
+            # Perform basic data cleaning including column names normalization
             df = self._clean_dataframe(df)
 
             # Cache the result
@@ -103,29 +103,41 @@ class DataScraper:
     def _clean_dataframe(self, df):
         """
         Perform basic cleaning on the DataFrame.
-        This includes removing multi-level headers and cleaning numerical columns.
+        This includes removing multi-level headers, cleaning numerical columns,
+        and normalizing column names.
         """
         import pandas as pd
 
         # Handle multi-level headers, which are common on Wikipedia.
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = ['_'.join(col).strip() for col in df.columns.values]
-        
-        # Clean column names
-        df.columns = df.columns.str.replace(r'[^a-zA-Z0-9_]', '', regex=True).str.lower()
 
-        # Convert columns to appropriate types
+        # Strip whitespace from columns
+        df.columns = df.columns.str.strip()
+
+        # Remove special characters (except underscores and spaces), including (, ), $, etc.
+        df.columns = df.columns.str.replace(r'[^\w\s]', '', regex=True)
+
+        # Replace spaces with underscores
+        df.columns = df.columns.str.replace(r'\s+', '_', regex=True)
+
+        # Lowercase all column names
+        df.columns = df.columns.str.lower()
+
+        # Convert columns to appropriate numeric types if possible
         for col in df.columns:
             if self._is_numeric_like(df[col]):
                 df[col] = self._convert_to_numeric(df[col])
-        
+
         return df
     
     def _is_numeric_like(self, series):
         """Check if a series appears to be numeric, even with text"""
         import pandas as pd
 
-        sample = series.dropna().sample(min(len(series.dropna()), 100))
+        sample = series.dropna()
+        if len(sample) > 100:
+            sample = sample.sample(100)
         numeric_count = 0
         for value in sample:
             clean_value = str(value).replace(',', '').replace('$', '').replace('%', '')
@@ -135,7 +147,7 @@ class DataScraper:
             except (ValueError, TypeError):
                 pass
         
-        return numeric_count / len(sample) > 0.6
+        return len(sample) > 0 and (numeric_count / len(sample)) > 0.6
     
     def _convert_to_numeric(self, series):
         """Convert series to numeric, handling common formats"""
@@ -147,6 +159,7 @@ class DataScraper:
             
             clean_str = str(value).replace(',', '').replace('$', '').replace('%', '')
             
+            # Handle negative values in parentheses
             if '(' in clean_str and ')' in clean_str:
                 clean_str = '-' + clean_str.replace('(', '').replace(')', '')
             
