@@ -94,11 +94,12 @@ class DataAnalyzer:
             f"- numpy as np\n"
             f"- matplotlib.pyplot as plt\n"
             f"- sklearn.linear_model.LinearRegression\n"
-            f"- scipy.stats.pearsonr\n"
+            f"- scipy.stats.pearsonr (please use safe_pearsonr(x, y) instead)\n"
             f"- scrape_url(url) → returns a pandas DataFrame synchronously.\n"
             f"⚠ DO NOT import pandas, numpy, matplotlib, sklearn, or scipy — they are already provided.\n"
             f"⚠ DO NOT redefine `pd`, `np`, `plt`, or other provided variables.\n"
             f"Do not use any external files or non-standard libraries.\n\n"
+            f"Use `safe_pearsonr(x, y)` instead of `pearsonr(x, y)` for correlation calculations.\n\n"
             f"# final_answer example:\n"
             f"# final_answer = [42, 'Analysis complete', 3.14, _save_plot_to_base64()]\n"
         )
@@ -145,6 +146,17 @@ class DataAnalyzer:
             else:
                 return asyncio.run(self.data_scraper.scrape_url(url))
 
+        def safe_pearsonr(x, y):
+            try:
+                res = stats.pearsonr(x, y)
+                if isinstance(res, tuple) and len(res) == 2:
+                    return res
+                else:
+                    # In case res is a scalar float64 or other
+                    return (res, None)
+            except Exception:
+                return (np.nan, np.nan)
+
         safe_builtins = {
             "print": print,
             "len": len,
@@ -166,33 +178,33 @@ class DataAnalyzer:
             "__import__": __import__,
         }
 
-        # Locals for exec
         local_scope = {
             "pd": pd,
             "np": np,
             "plt": plt,
             "io": io,
-            "BytesIO": io.BytesIO,         # Added BytesIO here
+            "BytesIO": io.BytesIO,
             "base64": base64,
             "LinearRegression": LinearRegression,
             "pearsonr": stats.pearsonr,
+            "safe_pearsonr": safe_pearsonr,
             "df": df,
             "additional_files": additional_files,
             "_save_plot_to_base64": _save_plot_to_base64,
             "scrape_url": _scrape_url_sync,
         }
 
-        # Globals for exec (pd and others exposed here too)
         global_scope = {
             "__builtins__": safe_builtins,
             "pd": pd,
             "np": np,
             "plt": plt,
             "io": io,
-            "BytesIO": io.BytesIO,         # Added BytesIO here
+            "BytesIO": io.BytesIO,
             "base64": base64,
             "LinearRegression": LinearRegression,
             "pearsonr": stats.pearsonr,
+            "safe_pearsonr": safe_pearsonr,
             "scrape_url": _scrape_url_sync,
             "_save_plot_to_base64": _save_plot_to_base64,
             "df": df,
@@ -200,7 +212,6 @@ class DataAnalyzer:
         }
 
         try:
-            # Pass both scopes to exec
             exec(analysis_code, global_scope, local_scope)
             if "final_answer" in local_scope:
                 result = local_scope["final_answer"]
@@ -259,14 +270,12 @@ class DataAnalyzer:
             return [0, f"Analysis failure: {str(e)}", 0.0, self._create_error_plot()]
 
     def _save_plot_to_base64_fallback(self) -> str:
-        """Save current plot to base64 string"""
         buffer = io.BytesIO()
         plt.savefig(buffer, format="png", bbox_inches="tight", dpi=100)
         plt.close()
         return f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode('utf-8')}"
 
     def _create_error_plot(self) -> str:
-        """Create a minimal error plot"""
         plt.figure(figsize=(4, 3))
         plt.text(0.5, 0.5, "Error", ha="center", va="center")
         plt.axis("off")
@@ -276,7 +285,6 @@ class DataAnalyzer:
         return f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode('utf-8')}"
 
     def get_fallback_response(self, error) -> List[Any]:
-        """Compatibility method for fallback"""
         try:
             loop = asyncio.get_running_loop()
             return [0, f"Error: {str(error)}", 0.0, self._create_error_plot()]
