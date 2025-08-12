@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional
 import pandas as pd
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
 from app.llm.llm_provider import LLMProvider
 from app.analysis.data_scraper import DataScraper
@@ -18,20 +19,6 @@ from app.utils.utils import get_logger, timer
 
 
 logger = get_logger(__name__)
-
-app = FastAPI(
-    title="Data Analyst Agent - Student Edition",
-    version="1.0.0",
-    description="AI-powered data analysis API optimized for student projects and free tiers"
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 class DataAnalysisHandler:
@@ -83,7 +70,7 @@ class DataAnalysisHandler:
             
             # Find the primary data file (e.g., CSV) and other files
             main_data_file = next((f for f in files if f.filename and f.filename.endswith(('.csv'))), None)
-            additional_files = {f.filename: await f.read() for f in files if f.filename not in ["questions.txt", main_data_file.filename]}
+            additional_files = {f.filename: await f.read() for f in files if f.filename not in ["questions.txt", main_data_file.filename if main_data_file else None]}
             
             df = None
             if main_data_file:
@@ -100,7 +87,7 @@ class DataAnalysisHandler:
             logger.error(f"Request failed: {e}")
             self.metrics["failed_requests"] += 1
             # Fallback for severe errors or if the LLM provider is disabled
-            return self.data_analyzer.get_fallback_response(e)
+            return await self.data_analyzer._fallback_analysis(str(e), df if 'df' in locals() else None)
             
     def get_metrics(self) -> Dict[str, Any]:
         success_rate = (
@@ -119,20 +106,35 @@ class DataAnalysisHandler:
 handler = DataAnalysisHandler()
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Application startup tasks"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     logger.info("Starting Data Analyst Agent...")
     await handler.initialize()
     logger.info("Data Analyst Agent started successfully")
-
-
-@app.on_event("shutdown") 
-async def shutdown_event():
-    """Application shutdown tasks"""
+    
+    yield
+    
+    # Shutdown
     logger.info("Shutting down Data Analyst Agent...")
     await handler.cleanup()
     logger.info("Shutdown complete")
+
+
+app = FastAPI(
+    title="Data Analyst Agent - Student Edition",
+    version="1.0.0",
+    description="AI-powered data analysis API optimized for student projects and free tiers",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.post("/api/")
