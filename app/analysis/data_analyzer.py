@@ -15,7 +15,7 @@ from scipy import stats
 from sklearn.linear_model import LinearRegression
 
 from app.llm.llm_provider import LLMProvider
-from app.analysis.data_scraper import DataScraper # Added for scraping functionality
+from app.analysis.data_scraper import DataScraper
 from app.utils.utils import get_logger
 
 
@@ -29,7 +29,7 @@ class DataAnalyzer:
     
     def __init__(self, llm_provider: LLMProvider):
         self.llm_provider = llm_provider
-        self.data_scraper = DataScraper() # Added for scraping functionality
+        self.data_scraper = DataScraper()
         
         # Configure matplotlib for server use
         plt.rcParams['figure.max_open_warning'] = 0
@@ -87,7 +87,7 @@ class DataAnalyzer:
             df_info_str = df_info_buffer.getvalue()
         else:
             df_head_str = "No data provided"
-            df_info_str = "No DataFrame info available. You may need to use the `scrape_url` function." # Updated hint
+            df_info_str = "No DataFrame info available. You may need to use the `scrape_url` function."
         
         prompt = (
             f"The user wants you to analyze a pandas DataFrame named `df` with the following properties:\n"
@@ -100,7 +100,7 @@ class DataAnalyzer:
             f"- `pandas as pd`, `numpy as np`, `matplotlib.pyplot as plt`, `io`, `base64`\n"
             f"- `sklearn.linear_model.LinearRegression`\n"
             f"- `scipy.stats.pearsonr`\n"
-            f"- `scrape_url(url)` to scrape a URL into a DataFrame if needed.\n" # Added scrape_url info
+            f"- `scrape_url(url)` to scrape a URL into a DataFrame if needed.\n"
             f"Your code must be a single, self-contained Python script. "
             f"Do not use any external files or non-standard libraries.\n\n"
             f"```python\n"
@@ -115,17 +115,13 @@ class DataAnalyzer:
         """
         Safely execute the LLM-generated Python code.
         """
-        # We create a restricted local namespace for the executed code.
-        # This prevents the code from accessing the full environment.
         
-        # Helper function for plotting to base64
         def _save_plot_to_base64() -> str:
             buffer = io.BytesIO()
             plt.savefig(buffer, format='png', bbox_inches='tight', dpi=100)
             plt.close()
             img_data = buffer.getvalue()
 
-            # Ensure the image size is under the 100KB limit
             if len(img_data) > 99000:
                 logger.warning("Plot image size exceeds 100KB. Re-generating with lower DPI.")
                 plt.figure(figsize=(6, 4))
@@ -151,7 +147,7 @@ class DataAnalyzer:
             'df': df,
             'additional_files': additional_files,
             '_save_plot_to_base64': _save_plot_to_base64,
-            'scrape_url': self.data_scraper.scrape_url, # Added for scraping functionality
+            'scrape_url': self.data_scraper.scrape_url,
             '__builtins__': {
                 'print': print,
                 'len': len,
@@ -170,19 +166,15 @@ class DataAnalyzer:
                 'min': min,
                 'abs': abs,
                 'round': round,
-                '__import__': __import__ # This is the crucial fix for import issues
+                '__import__': __import__
             },
         }
         
         try:
-            # We use `exec` to run the code. It's a powerful and dangerous function,
-            # which is why we are carefully controlling the `local_scope`.
             exec(analysis_code, {"__builtins__": {}}, local_scope)
             
-            # The code should have created a variable named `final_answer`.
             if 'final_answer' in local_scope:
                 result = local_scope['final_answer']
-                # Validate the result format
                 if isinstance(result, list) and len(result) == 4:
                     return result
                 else:
@@ -199,12 +191,10 @@ class DataAnalyzer:
     async def _fallback_analysis(self, questions: str, df: Optional[pd.DataFrame]) -> List[Any]:
         """
         Perform a basic fallback analysis if the LLM or generated code fails.
-        This provides a safe, non-crashing response.
         """
         logger.warning(f"Using fallback analysis method for: {questions}")
         
         try:
-            # Simple answers for a safe response based on available data
             if df is not None and not df.empty:
                 number_answer = len(df)
                 numeric_cols = df.select_dtypes(include=[np.number]).columns
@@ -215,7 +205,6 @@ class DataAnalyzer:
                     float_answer = 0.0
                     text_answer = f"Fallback analysis: Dataset has {number_answer} rows and {len(df.columns)} columns. No numeric columns found."
                 
-                # Create a simple plot of the data
                 plt.figure(figsize=(8, 6))
                 if len(numeric_cols) >= 2:
                     plt.scatter(df[numeric_cols[0]], df[numeric_cols[1]], alpha=0.6)
@@ -228,8 +217,7 @@ class DataAnalyzer:
                     plt.ylabel('Frequency')
                     plt.title(f'Distribution of {numeric_cols[0]}')
                 else:
-                    # No numeric data, create a simple bar chart of column counts
-                    col_counts = [len(df[col].dropna()) for col in df.columns[:5]]  # First 5 columns
+                    col_counts = [len(df[col].dropna()) for col in df.columns[:5]]
                     plt.bar(range(len(col_counts)), col_counts)
                     plt.xlabel('Column Index')
                     plt.ylabel('Non-null Count')
@@ -240,20 +228,17 @@ class DataAnalyzer:
                 text_answer = "Fallback analysis: No data provided or data is empty."
                 float_answer = 0.0
                 
-                # Create a minimal placeholder plot
                 plt.figure(figsize=(6, 4))
                 plt.text(0.5, 0.5, 'No Data Available', ha='center', va='center', fontsize=14)
                 plt.title('Fallback Analysis')
                 plt.axis('off')
 
-            # Save the plot
             plot_base64 = self._save_plot_to_base64_fallback()
             
             return [number_answer, text_answer, float_answer, plot_base64]
             
         except Exception as e:
             logger.error(f"Even fallback analysis failed: {e}")
-            # Last resort fallback
             return [0, f"Complete analysis failure: {str(e)}", 0.0, self._create_error_plot()]
     
     def _save_plot_to_base64_fallback(self) -> str:
@@ -266,7 +251,6 @@ class DataAnalyzer:
             plt.close()
             img_data = buffer.getvalue()
 
-            # Ensure the image size is under the 100KB limit
             if len(img_data) > 99000:
                 logger.warning("Fallback plot image size exceeds 100KB. Re-generating with lower DPI.")
                 plt.figure(figsize=(6, 4))
@@ -298,7 +282,6 @@ class DataAnalyzer:
             img_base64 = base64.b64encode(img_data).decode('utf-8')
             return f"data:image/png;base64,{img_base64}"
         except:
-            # Return a minimal 1x1 transparent PNG as absolute last resort
             return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
     
     def get_fallback_response(self, error) -> List[Any]:
@@ -307,12 +290,8 @@ class DataAnalyzer:
         """
         import asyncio
         
-        # If we're in an async context, run the async method
         try:
             loop = asyncio.get_running_loop()
-            # We're in an async context, but this is a sync method
-            # Return a simple fallback
             return [0, f"Error occurred: {str(error)}", 0.0, self._create_error_plot()]
         except RuntimeError:
-            # No event loop, we can run async
             return asyncio.run(self._fallback_analysis(str(error), None))
